@@ -7,6 +7,7 @@ import collection_permutations
 from itertools import combinations_with_replacement
 
 from sage.all import *
+from sage.combinat.cartesian_product import CartesianProduct
 
 # turn off the warnings (because of sage)...
 warnings.filterwarnings('ignore')
@@ -39,7 +40,7 @@ class ReconstructDirectedRootedTree:
         if reset_finished:
             ReconstructDirectedRootedTree.finished = {self.leaf_pol: [self.leaf_pol]}
         if p.degree(x) > len(ReconstructDirectedRootedTree.terms):
-            ReconstructDirectedRootedTree.terms = [x**k for k in xrange(1, p.degree(x) + 1)]
+            ReconstructDirectedRootedTree.terms = [x ** k for k in xrange(1, p.degree(x) + 1)]
 
     @staticmethod
     def pretty_print(p):
@@ -162,7 +163,7 @@ class ReconstructDirectedRootedTree:
         # if each polynomial was good => return the product
         if badcnt == 0:
             rdt_solution_lst = []
-            for rp in product(*good_pols.values()):
+            for rp in CartesianProduct(*good_pols.values()):  # product(*aaa):
                 prod_pol = reduce(operator.mul, (ap[0] ** ap[1] for ap in rp), 1)
                 rdt_solution_lst.append(prod_pol)
             ReconstructDirectedRootedTree.finished[p] = rdt_solution_lst
@@ -192,7 +193,7 @@ class ReconstructDirectedRootedTree:
                                        xrange(len(agroup[0]))), 1)
                     # check if it represents a valid directed rooted tree
                     # if len(ReconstructDirectedRootedTree.reconstruct(((prod_pol - 1) / x).expand())) > 0:
-                    act_group_solution =\
+                    act_group_solution = \
                         [1 + x * rp for rp in ReconstructDirectedRootedTree.reconstruct(((prod_pol - 1) / x).expand())]
                     if len(act_group_solution) > 0:
                         cp.set_good_solution(ReconstructDirectedRootedTree.SolutionWrapper(act_group_solution))
@@ -204,7 +205,8 @@ class ReconstructDirectedRootedTree:
                     for group in solution_groups:
                         gpl[group] += 1
 
-                for rp in product(*[combinations_with_replacement(g[0].get_solutions, g[1]) for g in gpl.items()]):
+                for rp in CartesianProduct(
+                        *[tuple(combinations_with_replacement(g[0].get_solutions, g[1])) for g in gpl.items()]):
                     prod_pol = reduce(operator.mul, (reduce(operator.mul, ct, 1) for ct in rp), 1)
                     rdt_solution_lst.append(prod_pol)
             # print "end of generating solutions..."
