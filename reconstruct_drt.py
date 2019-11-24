@@ -215,7 +215,120 @@ class ReconstructDirectedRootedTree:
         ReconstructDirectedRootedTree.finished[p] = rdt_solution_lst
         return rdt_solution_lst
 
+    @staticmethod
+    def reconstruct_iter(p):
+        p_degree = p.degree(x)
+        if p_degree == 0:
+            if p == 1:
+                yield p
+            raise StopIteration
+        elif p_degree == 1:
+            if p == ReconstructDirectedRootedTree.leaf_pol:
+                yield p
+            raise StopIteration
+        elif p(0) != 1:
+            raise StopIteration
+        elif p in ReconstructDirectedRootedTree.finished:
+            for solution in ReconstructDirectedRootedTree.finished[p]:
+                yield solution
+            raise StopIteration
+
+        pol_listn = p.coefficient(ReconstructDirectedRootedTree.terms[p.degree(x) - 1])
+        if pol_listn != 1:
+            ReconstructDirectedRootedTree.finished[p] = []
+            raise StopIteration
+
+        pol_list1 = p.coefficient(x)
+        if pol_list1 == 1:
+            rdt_solution_lst = []
+            for rp in ReconstructDirectedRootedTree.reconstruct2(((p - 1) / x).expand()):
+                rdt_solution_lst.append(1 + x * rp)
+                yield rdt_solution_lst[-1]
+
+            ReconstructDirectedRootedTree.finished[p] = rdt_solution_lst
+            raise StopIteration
+
+        fl = p.factor_list()
+        good_pols = defaultdict(lambda: [])
+        badcnt = 0
+        pold = ReconstructDirectedRootedTree.TypeSet()
+        pol_type_occurrences = []
+        for prime_pol in fl:
+            if prime_pol[0].degree(x) == 1:
+                if prime_pol[0] == ReconstructDirectedRootedTree.leaf_pol:
+                    good_pols[prime_pol[0]] = [(prime_pol[0], prime_pol[1])]
+                    prl1 = 1
+                else:
+                    prl1 = prime_pol[0].coefficient(x)
+                    badcnt += prime_pol[1]
+            else:
+                prl0 = prime_pol[0](0)
+                prl1 = prime_pol[0].coefficient(x)
+                prl_n = prime_pol[0].coefficient(
+                    ReconstructDirectedRootedTree.terms[prime_pol[0].degree(x) - 1])
+
+                if prl0 != 1 or prl_n != 1:
+                    ReconstructDirectedRootedTree.finished[p] = []
+                    raise StopIteration
+
+                was_solution = False
+                if prl1 == 1:
+                    for rp in ReconstructDirectedRootedTree.reconstruct2(
+                            ((prime_pol[0] - 1) / x).expand()):
+                        was_solution = True
+                        good_pols[prime_pol[0]].append((1 + x * rp, prime_pol[1]))
+                if not was_solution:
+                    badcnt += prime_pol[1]
+
+            pol_type_occurrences += prime_pol[1] * [prl1]
+            pold.add(prl1, prime_pol[0], prime_pol[1])
+        # print "end of iter through factors..."
+
+        if badcnt == 0:
+            rdt_solution_lst = []
+            for rp in CartesianProduct(*good_pols.values()):  # product(*aaa):
+                prod_pol = reduce(operator.mul, (ap[0] ** ap[1] for ap in rp), 1)
+                rdt_solution_lst.append(prod_pol)
+                yield rdt_solution_lst[-1]
+            ReconstructDirectedRootedTree.finished[p] = rdt_solution_lst
+            raise StopIteration
+
+        rdt_solution_lst = []
+        type_dict = pold.get_type_dict()
+        for groups in partitions.Partitions(pol_type_occurrences):
+            cp = collection_permutations.CollectionPermutations(groups, type_dict)
+            for agroup in cp:
+                if len(agroup[0]) == 1:
+                    type_1_prime_pol = pold.get_key_by_index(agroup[0][0], agroup[1][0])
+                    if type_1_prime_pol in good_pols:
+                        cp.set_good_solution(
+                            ReconstructDirectedRootedTree.SolutionWrapper(
+                                [g[0] for g in good_pols[type_1_prime_pol]]))
+                else:
+                    prod_pol = reduce(operator.mul,
+                                      (pold.get_key_by_index(agroup[0][j], agroup[1][j]) for j in
+                                       xrange(len(agroup[0]))), 1)
+                    act_group_solution = \
+                        [1 + x * rp for rp in
+                         ReconstructDirectedRootedTree.reconstruct2(((prod_pol - 1) / x).expand())]
+                    if len(act_group_solution) > 0:
+                        cp.set_good_solution(
+                            ReconstructDirectedRootedTree.SolutionWrapper(act_group_solution))
+
+            for solution in cp.get_validated_solutions:
+                gpl = defaultdict(lambda: 0)
+                for solution_groups in solution:
+                    for group in solution_groups:
+                        gpl[group] += 1
+
+                for rp in CartesianProduct(
+                        *[tuple(combinations_with_replacement(g[0].get_solutions, g[1])) for g in
+                          gpl.items()]):
+                    prod_pol = reduce(operator.mul, (reduce(operator.mul, ct, 1) for ct in rp), 1)
+                    rdt_solution_lst.append(prod_pol)
+                    yield rdt_solution_lst[-1]
+
+        ReconstructDirectedRootedTree.finished[p] = rdt_solution_lst
+
     def __iter__(self):
-        # self.tree_iter = iter(ReconstructDirectedRootedTree.reconstruct(self.polynomial))
-        # %lprun -f ReconstructDirectedRootedTree.reconstruct
-        return iter(ReconstructDirectedRootedTree.reconstruct(self.polynomial))
+        return iter(ReconstructDirectedRootedTree.reconstruct_iter(self.polynomial))
